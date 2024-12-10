@@ -3,6 +3,7 @@ name: Daily Preply Scraper
 on:
   schedule:
     - cron: '0 7 * * *'
+  workflow_dispatch:
 
 jobs:
   run-script:
@@ -19,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install requests selenium
-          # Add any other dependencies your script needs
+          # any other dependencies
 
       - name: Run script
         run: python preply_scraper.py
