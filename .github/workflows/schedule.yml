@@ -16,11 +16,15 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install dependencies
+      - name: Install Chromium and ChromeDriver
         run: |
           sudo apt-get update
+          # Install chromium and chromium-driver packages
           sudo apt-get install -y chromium-browser chromium-chromedriver
-          pip install requests selenium
+      - name: Install Chromium and ChromeDriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium chromium-chromedriver
 
       - name: Run script
         env:
