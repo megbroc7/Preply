@@ -22,6 +22,9 @@ jobs:
           # Install chromium and chromium-driver packages
           sudo apt-get install -y chromium-browser chromium-chromedriver
 
+      - name: Install Python dependencies
+        run: |
+          pip install requests selenium
 
       - name: Run script
         env:
