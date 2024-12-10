@@ -165,7 +165,7 @@ def main():
 
     options = Options()
     options.add_argument("--headless")
-    service = Service('./chromedriver')
+    service = Service('/usr/bin/chromedriver')
     driver = webdriver.Chrome(service=service, options=options)
 
     all_success = True
