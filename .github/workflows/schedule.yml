@@ -21,10 +21,7 @@ jobs:
           sudo apt-get update
           # Install chromium and chromium-driver packages
           sudo apt-get install -y chromium-browser chromium-chromedriver
-      - name: Install Chromium and ChromeDriver
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium chromium-chromedriver
+
 
       - name: Run script
         env:
