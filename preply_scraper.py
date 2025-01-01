@@ -14,7 +14,7 @@ TUTOR_TABLE_NAME = "Tutor Data"
 EVENT_LOG_TABLE_NAME = "Event Log"
 PREPLY_URL = "https://preply.com/en/online/businessandmanagement-tutors"
 MAX_RETRIES = 3
-TOTAL_PAGES = 12  # Adjust if the number of pages changes
+TOTAL_PAGES = 11  # Adjust if the number of pages changes
 
 def log_event(event, status):
     """
