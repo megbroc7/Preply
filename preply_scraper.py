@@ -142,27 +142,41 @@ def extract_price_from_card(card):
                 continue
                 
         # APPROACH 2: Based on layout in screenshot - look for elements containing numbers 
-        # near the "min lesson" text
+        # near the "min lesson" text or "per hour" text
         try:
-            lesson_elements = card.find_elements(By.XPATH, ".//*[contains(text(), 'min lesson')]")
-            if lesson_elements:
-                # Check nearby elements for price format
-                parent = lesson_elements[0].find_element(By.XPATH, "./../..")
-                all_elements = parent.find_elements(By.XPATH, ".//*")
-                
-                for elem in all_elements:
-                    text = elem.text.strip()
-                    # Look for currency symbol followed or preceded by digits
-                    if re.search(r'[\$€£¥₽₴₹]\s*\d+|\d+\s*[\$€£¥₽₴₹]', text):
-                        match = re.search(r'([\$€£¥₽₴₹])\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*([\$€£¥₽₴₹])', text)
-                        if match:
-                            if match.group(1):  # Format: $50
-                                currency = match.group(1)
-                                value = float(match.group(2).replace(',', ''))
-                            else:  # Format: 50$
-                                currency = match.group(4)
-                                value = float(match.group(3).replace(',', ''))
-                            return value, currency
+            lesson_text_selectors = [
+                ".//*[contains(text(), 'min lesson')]",
+                ".//*[contains(text(), 'per hour')]"
+            ]
+            
+            for xpath_selector in lesson_text_selectors:
+                try:
+                    lesson_elements = card.find_elements(By.XPATH, xpath_selector)
+                    if lesson_elements:
+                        # Check nearby elements for price format
+                        for lesson_elem in lesson_elements:
+                            try:
+                                # Try parent element and its children
+                                parent = lesson_elem.find_element(By.XPATH, "./../..")
+                                all_elements = parent.find_elements(By.XPATH, ".//*")
+                                
+                                for elem in all_elements:
+                                    text = elem.text.strip()
+                                    # Look for currency symbol followed or preceded by digits
+                                    if re.search(r'[\$€£¥₽₴₹]\s*\d+|\d+\s*[\$€£¥₽₴₹]', text):
+                                        match = re.search(r'([\$€£¥₽₴₹])\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*([\$€£¥₽₴₹])', text)
+                                        if match:
+                                            if match.group(1):  # Format: $50
+                                                currency = match.group(1)
+                                                value = float(match.group(2).replace(',', ''))
+                                            else:  # Format: 50$
+                                                currency = match.group(4)
+                                                value = float(match.group(3).replace(',', ''))
+                                            return value, currency
+                            except:
+                                continue
+                except:
+                    continue
         except:
             pass
             
@@ -217,21 +231,33 @@ def extract_price_from_card(card):
 
 def debug_tutor_card(card, tutor_name):
     """
-    Save the HTML of a tutor card for debugging purposes
+    Save the HTML of a tutor card for debugging purposes with enhanced element detection
     """
     try:
         html = card.get_attribute('outerHTML')
         with open(f"tutor_card_{tutor_name.replace(' ', '_')}.html", 'w', encoding='utf-8') as f:
             f.write(html)
         
-        # Also log all text elements with their XPaths
-        print(f"-- DEBUG TEXT ELEMENTS FOR {tutor_name} --")
+        # Log all text elements with expanded information
+        print(f"\n-- DEBUG TEXT ELEMENTS FOR {tutor_name} --")
         all_elements = card.find_elements(By.XPATH, ".//*")
         for i, elem in enumerate(all_elements):
             try:
                 text = elem.text.strip()
                 if text:
-                    print(f"Element {i}: '{text}'")
+                    tag_name = elem.tag_name
+                    class_attr = elem.get_attribute('class') or ''
+                    
+                    # Special highlight for potential review elements
+                    highlight = ""
+                    if "review" in text.lower() or re.search(r'\d+\s+review', text.lower()):
+                        highlight = " [POSSIBLE REVIEWS]"
+                    elif "★" in text or "stars" in text.lower() or re.match(r'^\d+(\.\d+)?$', text):
+                        highlight = " [POSSIBLE RATING]"
+                    elif re.match(r'^[\$€£¥₽₴₹]\s*\d+|\d+\s*[\$€£¥₽₴₹]', text):
+                        highlight = " [POSSIBLE PRICE]"
+                        
+                    print(f"Element {i}: <{tag_name} class='{class_attr}'> '{text}'{highlight}")
             except:
                 pass
     except Exception as e:
@@ -398,34 +424,111 @@ def process_tutors_on_current_page(driver):
                     print("Could not find tutor name, skipping this tutor")
                     continue
 
-                # Reviews extraction with improved handling
+                # Reviews extraction with improved handling to distinguish between star rating and review count
                 num_reviews = 0
                 try:
+                    # First look specifically for elements containing the word "reviews"
                     reviews_selectors = [
-                        "button[data-clickable-element-name='reviews']",
+                        "*[contains(text(), 'reviews')]",  # XPath selector for any element containing "reviews"
+                        "span[class*='review'] span",
                         "[data-qa-group='reviews-count']",
                         "*[class*='reviews']"
                     ]
                     
                     for selector in reviews_selectors:
                         try:
-                            reviews_element = card.find_element(By.CSS_SELECTOR, selector)
-                            reviews_text = reviews_element.text.strip()
-                            
-                            # Various patterns to extract numbers
-                            if "reviews" in reviews_text.lower():
-                                parts = reviews_text.split()
-                                for part in parts:
-                                    if part.isdigit():
-                                        num_reviews = int(part)
+                            if selector.startswith("*[contains"):
+                                # This is an XPath selector
+                                reviews_elements = card.find_elements(By.XPATH, f".//{selector}")
+                            else:
+                                # This is a CSS selector
+                                reviews_elements = card.find_elements(By.CSS_SELECTOR, selector)
+                                
+                            for reviews_element in reviews_elements:
+                                reviews_text = reviews_element.text.strip()
+                                
+                                # Look specifically for patterns like "27 reviews"
+                                if "reviews" in reviews_text.lower():
+                                    # Extract number before the word "reviews"
+                                    match = re.search(r'(\d+)\s+reviews', reviews_text.lower())
+                                    if match:
+                                        num_reviews = int(match.group(1))
+                                        break
+                                    
+                                    # Try another pattern - just extract any number
+                                    numbers = re.findall(r'\d+', reviews_text)
+                                    if numbers:
+                                        num_reviews = int(numbers[0])
                                         break
                             
                             if num_reviews > 0:
                                 break
-                        except:
+                        except Exception as e:
+                            print(f"Error with reviews selector {selector}: {e}")
                             continue
-                except:
+                    
+                    # If we still haven't found reviews, try an alternative approach 
+                    # based on looking near the star rating
+                    if num_reviews == 0:
+                        try:
+                            # Look for star ratings first (usually nearby the reviews count)
+                            star_selectors = [
+                                "*[contains(text(), '★')]",  # XPath for star symbol
+                                "*[class*='star']",
+                                "*[class*='rating']"
+                            ]
+                            
+                            for selector in star_selectors:
+                                try:
+                                    if selector.startswith("*[contains"):
+                                        star_elements = card.find_elements(By.XPATH, f".//{selector}")
+                                    else:
+                                        star_elements = card.find_elements(By.CSS_SELECTOR, selector)
+                                        
+                                    if star_elements:
+                                        # Found the star rating, now look for nearby elements with numbers that might be reviews
+                                        for star_elem in star_elements:
+                                            # Try to find parent container that might have both rating and reviews
+                                            parent = star_elem.find_element(By.XPATH, "./..")
+                                            # Look for elements with text containing digits
+                                            number_elements = parent.find_elements(By.XPATH, ".//*[contains(text(), '0') or contains(text(), '1') or contains(text(), '2')]")
+                                            
+                                            for elem in number_elements:
+                                                text = elem.text.strip()
+                                                if "reviews" in text.lower():
+                                                    match = re.search(r'(\d+)\s+reviews', text.lower())
+                                                    if match:
+                                                        num_reviews = int(match.group(1))
+                                                        break
+                                        break
+                                except:
+                                    continue
+                        except:
+                            pass
+                            
+                except Exception as e:
+                    print(f"Error extracting reviews: {e}")
                     num_reviews = 0
+
+                # If we still have zero reviews, try one more fallback approach
+                if num_reviews == 0:
+                    try:
+                        # Based on your screenshot layout, reviews appear near ratings
+                        # Try to find any text that looks like "27 reviews"
+                        all_elements = card.find_elements(By.XPATH, ".//*")
+                        for elem in all_elements:
+                            try:
+                                text = elem.text.strip()
+                                match = re.search(r'(\d+)\s+reviews', text.lower())
+                                if match:
+                                    num_reviews = int(match.group(1))
+                                    break
+                            except:
+                                continue
+                    except:
+                        pass
+
+                print(f"Extracted reviews count: {num_reviews}")
 
                 # Active Students and Lessons with improved selector flexibility
                 active_students_num = 0
